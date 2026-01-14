@@ -1,22 +1,18 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Filter, Search, Edit2, Trash2, CheckCircle, XCircle, Clock } from 'lucide-react';
-
-const REQUEST_DATA = [
-    { id: "REQ-001", type: "Service Booking", user: "Budi Santoso", date: "Jan 12, 10:30 AM", status: "completed", sessionId: "SESS-892" },
-    { id: "REQ-002", type: "Test Drive", user: "Sarah Wijaya", date: "Jan 12, 11:45 AM", status: "pending" },
-    { id: "REQ-003", type: "Sparepart Info", user: "Ahmad Dani", date: "Jan 11, 04:20 PM", status: "cancelled" },
-];
+import axios from 'axios';
 
 const StatusBadge = ({ status }) => {
     const colors = {
         completed: "bg-green-100 text-green-700",
         pending: "bg-yellow-100 text-yellow-700",
+        processed: "bg-blue-100 text-blue-700",
         cancelled: "bg-red-100 text-red-700"
     };
     return (
-        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${colors[status]}`}>
+        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${colors[status] || "bg-gray-100 text-gray-700"}`}>
             {status}
         </span>
     );
@@ -24,10 +20,55 @@ const StatusBadge = ({ status }) => {
 
 const RequestPage = () => {
     const navigate = useNavigate();
+    const [requests, setRequests] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+
+    useEffect(() => {
+        fetchRequests();
+    }, []);
+
+    const fetchRequests = async () => {
+        try {
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/requests`);
+            setRequests(response.data);
+            setLoading(false);
+        } catch (error) {
+            console.error('Error fetching requests:', error);
+            setLoading(false);
+        }
+    };
 
     const handleRowClick = (req) => {
         navigate(`/dashboard/request/${req.id}`, { state: { data: req } });
     };
+
+    const handleDelete = async (e, id) => {
+        e.stopPropagation();
+        if (window.confirm('Are you sure you want to delete this request?')) {
+            try {
+                await axios.delete(`${import.meta.env.VITE_API_URL}/requests/${id}`);
+                fetchRequests();
+            } catch (error) {
+                console.error('Error deleting request:', error);
+            }
+        }
+    };
+
+    const formatDate = (dateString) => {
+        return new Date(dateString).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    const filteredRequests = requests.filter(req =>
+        req.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        req.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        req.type.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     return (
         <div className="space-y-6">
@@ -45,7 +86,12 @@ const RequestPage = () => {
                 <div className="p-6 border-b border-gray-100 flex gap-4">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-                        <input className="w-full pl-10 pr-4 py-2 bg-gray-50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-100" placeholder="Search requests..." />
+                        <input
+                            className="w-full pl-10 pr-4 py-2 bg-gray-50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
+                            placeholder="Search requests..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
                     </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -61,29 +107,42 @@ const RequestPage = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {REQUEST_DATA.map((req, i) => (
-                                <tr
-                                    key={i}
-                                    onClick={() => handleRowClick(req)}
-                                    className="hover:bg-gray-50/50 transition-colors cursor-pointer group"
-                                >
-                                    <td className="px-6 py-4 font-mono text-xs font-bold text-gray-500 group-hover:text-red-600 transition-colors">{req.id}</td>
-                                    <td className="px-6 py-4 font-bold text-gray-900">{req.type}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600 font-medium">{req.user}</td>
-                                    <td className="px-6 py-4 text-xs text-gray-500 font-medium">{req.date}</td>
-                                    <td className="px-6 py-4"><StatusBadge status={req.status} /></td>
-                                    <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex gap-2">
-                                            <button className="p-2 bg-gray-50 hover:bg-yellow-400 hover:text-black rounded-lg text-gray-400 transition-all">
-                                                <Edit2 size={16} />
-                                            </button>
-                                            <button className="p-2 bg-gray-50 hover:bg-red-600 hover:text-white rounded-lg text-gray-400 transition-all">
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </td>
+                            {loading ? (
+                                <tr>
+                                    <td colSpan="6" className="px-6 py-8 text-center text-gray-500">Loading requests...</td>
                                 </tr>
-                            ))}
+                            ) : filteredRequests.length === 0 ? (
+                                <tr>
+                                    <td colSpan="6" className="px-6 py-8 text-center text-gray-500">No requests found</td>
+                                </tr>
+                            ) : (
+                                filteredRequests.map((req, i) => (
+                                    <tr
+                                        key={i}
+                                        onClick={() => handleRowClick(req)}
+                                        className="hover:bg-gray-50/50 transition-colors cursor-pointer group"
+                                    >
+                                        <td className="px-6 py-4 font-mono text-xs font-bold text-gray-500 group-hover:text-red-600 transition-colors">{req.id}</td>
+                                        <td className="px-6 py-4 font-bold text-gray-900">{req.type}</td>
+                                        <td className="px-6 py-4 text-sm text-gray-600 font-medium">{req.name}</td>
+                                        <td className="px-6 py-4 text-xs text-gray-500 font-medium">{formatDate(req.created_at)}</td>
+                                        <td className="px-6 py-4"><StatusBadge status={req.status} /></td>
+                                        <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex gap-2">
+                                                <button className="p-2 bg-gray-50 hover:bg-yellow-400 hover:text-black rounded-lg text-gray-400 transition-all">
+                                                    <Edit2 size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => handleDelete(e, req.id)}
+                                                    className="p-2 bg-gray-50 hover:bg-red-600 hover:text-white rounded-lg text-gray-400 transition-all"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>

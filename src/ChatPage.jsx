@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
+import toast, { Toaster } from 'react-hot-toast';
 import {
     ArrowLeft,
     Send,
@@ -11,10 +12,11 @@ import {
     Tag,
     DollarSign,
     Sparkles,
-    MessageCircle
+    MessageCircle,
+    CheckCircle
 } from 'lucide-react';
 
-const MITSUBISHI_RED = "#E60012";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 const NAV_TYPES = [
     { id: 'all', label: 'Semua', icon: Sparkles },
@@ -26,44 +28,79 @@ const NAV_TYPES = [
     { id: 'testdrive', label: 'Test Drive', icon: Car },
 ];
 
-const QUICK_RESPONSES = {
-    promo: "Saat ini ada Promo Merdeka! DP ringan untuk Xpander mulai 10jt dan Pajero Sport dengan bunga 0%. Mau saya kirimkan brosur lengkapnya?",
-    service: "Booking service di SUN Bekasi sangat mudah. Kami ada slot kosong besok jam 09.00 atau 13.00. Anda ingin saya pesankan sekarang?",
-    harga: "Daftar harga terbaru OTR Bekasi: Xpander mulai Rp 260jt-an, Pajero Sport mulai Rp 560jt-an. Ada unit spesifik yang Anda minati?",
-    lokasi: "Kami berlokasi di Jl. Raya Bekasi KM 21, Medan Satria. Dekat dengan Harapan Indah. Mau saya kirimkan link Google Maps?",
-    booking: "Silakan pilih jenis booking: 1) Test Drive 2) Service Berkala 3) Konsultasi Sales. Ketik angka pilihannya ya!",
-    testdrive: "Test drive tersedia untuk: Xpander, Pajero Sport, Triton, dan L300. Unit mana yang ingin Anda coba? Kami bisa atur jadwal sesuai keinginan Anda.",
-    default: "Tentu! Saya bisa membantu terkait hal tersebut. Apakah Anda ingin berbicara dengan konsultan marketing kami untuk detail lebih lanjut?"
-};
-
 export default function ChatPage() {
     const navigate = useNavigate();
     const location = useLocation();
-    const [messages, setMessages] = useState([
-        { role: 'assistant', content: "Halo! Saya Sunny, asisten AI Mitsubishi SUN Bekasi. Ada yang bisa saya bantu hari ini?" }
-    ]);
+    const [messages, setMessages] = useState([]);
     const [inputValue, setInputValue] = useState("");
     const [activeType, setActiveType] = useState('all');
     const [isTyping, setIsTyping] = useState(false);
+    const [sessionId, setSessionId] = useState(null);
+    const [collectedData, setCollectedData] = useState({});
+    const [isInitializing, setIsInitializing] = useState(true);
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
     const navScrollRef = useRef(null);
-
     const processedInit = useRef(false);
+
+    // Initialize session on mount
+    useEffect(() => {
+        const initSession = async () => {
+            try {
+                // Check for existing session in localStorage
+                const existingSessionId = localStorage.getItem('chatSessionId');
+
+                if (existingSessionId) {
+                    // Try to restore existing session
+                    const response = await fetch(`${API_BASE}/chat/session/${existingSessionId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setSessionId(existingSessionId);
+                        setMessages(data.messages);
+                        setIsInitializing(false);
+                        return;
+                    }
+                }
+
+                // Create new session
+                const response = await fetch(`${API_BASE}/chat/session`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    setSessionId(data.sessionId);
+                    setMessages([data.message]);
+                    localStorage.setItem('chatSessionId', data.sessionId);
+                }
+            } catch (error) {
+                console.error('Failed to initialize session:', error);
+                // Fallback to offline mode
+                setMessages([{
+                    role: 'assistant',
+                    content: "Halo! Saya SUNNY, asisten AI Mitsubishi SUN Bekasi. Ada yang bisa saya bantu hari ini? 😊"
+                }]);
+            } finally {
+                setIsInitializing(false);
+            }
+        };
+
+        initSession();
+    }, []);
 
     // Handle initial message from route state
     useEffect(() => {
-        if (location.state?.initialMessage && !processedInit.current) {
+        if (!isInitializing && location.state?.initialMessage && !processedInit.current && sessionId) {
             handleSendMessage(location.state.initialMessage);
             processedInit.current = true;
-            // Clear location state to prevent reload issues
             window.history.replaceState({}, '');
         }
-        // Focus on input
-        if (inputRef.current) {
+
+        if (!isInitializing && inputRef.current) {
             inputRef.current.focus();
         }
-    }, []);
+    }, [isInitializing, sessionId, location.state]);
 
     // Auto-scroll on new messages
     useEffect(() => {
@@ -72,43 +109,89 @@ export default function ChatPage() {
         }
     }, [messages, isTyping]);
 
-    const handleSendMessage = (text) => {
-        if (!text.trim()) return;
+    const handleSendMessage = async (text) => {
+        if (!text.trim() || !sessionId) return;
 
-        const newMessages = [...messages, { role: 'user', content: text }];
-        setMessages(newMessages);
+        const userMessage = { role: 'user', content: text };
+        setMessages(prev => [...prev, userMessage]);
         setInputValue("");
         setIsTyping(true);
 
-        // Simulated AI response with delay
-        setTimeout(() => {
-            const lowerText = text.toLowerCase();
-            let response = QUICK_RESPONSES.default;
+        try {
+            const response = await fetch(`${API_BASE}/chat/message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId,
+                    message: text,
+                    collectedData
+                })
+            });
 
-            // Match response based on keywords
-            if (lowerText.includes("promo")) {
-                response = QUICK_RESPONSES.promo;
-                setActiveType('promo');
-            } else if (lowerText.includes("service") || lowerText.includes("servis")) {
-                response = QUICK_RESPONSES.service;
-                setActiveType('service');
-            } else if (lowerText.includes("harga") || lowerText.includes("price")) {
-                response = QUICK_RESPONSES.harga;
-                setActiveType('harga');
-            } else if (lowerText.includes("lokasi") || lowerText.includes("alamat") || lowerText.includes("maps")) {
-                response = QUICK_RESPONSES.lokasi;
-                setActiveType('lokasi');
-            } else if (lowerText.includes("booking") || lowerText.includes("pesan")) {
-                response = QUICK_RESPONSES.booking;
-                setActiveType('booking');
-            } else if (lowerText.includes("test drive") || lowerText.includes("coba")) {
-                response = QUICK_RESPONSES.testdrive;
-                setActiveType('testdrive');
+            if (response.ok) {
+                const data = await response.json();
+                setMessages(prev => [...prev, data.message]);
+
+                // Update collected data
+                if (data.collected_data) {
+                    setCollectedData(prev => ({ ...prev, ...data.collected_data }));
+                }
+
+                // Show toast if request was created
+                if (data.requestId) {
+                    toast.success(
+                        <div className="flex items-center gap-2">
+                            <CheckCircle size={18} />
+                            <span>Data berhasil dikumpulkan! Request ID: <strong>{data.requestId}</strong></span>
+                        </div>,
+                        { duration: 5000 }
+                    );
+                }
+
+                // Auto-detect type from message
+                const lowerText = text.toLowerCase();
+                if (lowerText.includes("promo")) {
+                    setActiveType('promo');
+                } else if (lowerText.includes("service") || lowerText.includes("servis")) {
+                    setActiveType('service');
+                } else if (lowerText.includes("harga") || lowerText.includes("price")) {
+                    setActiveType('harga');
+                } else if (lowerText.includes("lokasi") || lowerText.includes("alamat")) {
+                    setActiveType('lokasi');
+                } else if (lowerText.includes("booking") || lowerText.includes("pesan")) {
+                    setActiveType('booking');
+                } else if (lowerText.includes("test drive") || lowerText.includes("coba")) {
+                    setActiveType('testdrive');
+                }
+            } else {
+                throw new Error('Failed to get response');
             }
-
+        } catch (error) {
+            console.error('Message error:', error);
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: "Maaf, terjadi gangguan koneksi. Silakan coba lagi atau hubungi dealer kami langsung di (021) 8834 7777."
+            }]);
+        } finally {
             setIsTyping(false);
-            setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-        }, 1200);
+        }
+    };
+
+    const handleBack = async () => {
+        // End current session before navigating back
+        if (sessionId) {
+            try {
+                await fetch(`${API_BASE}/chat/end`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId })
+                });
+                localStorage.removeItem('chatSessionId');
+            } catch (e) {
+                console.error('Failed to end session:', e);
+            }
+        }
+        navigate('/');
     };
 
     const handleNavTypeClick = (typeId) => {
@@ -119,14 +202,68 @@ export default function ChatPage() {
         }
     };
 
+    const handleNewChat = async () => {
+        // End current session
+        if (sessionId) {
+            try {
+                await fetch(`${API_BASE}/chat/end`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId })
+                });
+            } catch (e) {
+                console.error('Failed to end session:', e);
+            }
+        }
+
+        // Clear local storage and state
+        localStorage.removeItem('chatSessionId');
+        setSessionId(null);
+        setMessages([]);
+        setCollectedData({});
+        setActiveType('all');
+        processedInit.current = false;
+
+        // Create new session
+        try {
+            const response = await fetch(`${API_BASE}/chat/session`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                setSessionId(data.sessionId);
+                setMessages([data.message]);
+                localStorage.setItem('chatSessionId', data.sessionId);
+            }
+        } catch (error) {
+            console.error('Failed to create new session:', error);
+        }
+    };
+
+    if (isInitializing) {
+        return (
+            <div className="fixed inset-0 flex items-center justify-center bg-gray-50">
+                <div className="text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-yellow-400 flex items-center justify-center text-black font-black text-2xl mx-auto mb-4 animate-pulse">
+                        S
+                    </div>
+                    <p className="text-gray-600 font-medium">Memuat SUNNY AI...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="fixed inset-0 flex flex-col bg-gray-50">
+            <Toaster position="top-center" />
             {/* Header */}
             <header className="shrink-0 bg-gray-950 text-white px-4 pb-4 safe-area-top">
                 <div className="flex items-center gap-4 mt-4">
                     <motion.button
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => navigate('/')}
+                        onClick={handleBack}
                         className="p-2 -ml-2 hover:bg-white/10 rounded-xl transition-colors"
                     >
                         <ArrowLeft className="w-6 h-6" />
@@ -148,9 +285,13 @@ export default function ChatPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-                            <MessageCircle className="w-4 h-4" />
-                        </div>
+                        <motion.button
+                            whileTap={{ scale: 0.9 }}
+                            onClick={handleNewChat}
+                            className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold uppercase tracking-wider transition-colors"
+                        >
+                            Chat Baru
+                        </motion.button>
                     </div>
                 </div>
             </header>
@@ -254,8 +395,8 @@ export default function ChatPage() {
                     <motion.button
                         type="submit"
                         whileTap={{ scale: 0.9 }}
-                        disabled={!inputValue.trim()}
-                        className={`absolute right-2 top-2 bottom-2 w-12 rounded-xl flex items-center justify-center transition-all shadow-lg ${inputValue.trim()
+                        disabled={!inputValue.trim() || isTyping}
+                        className={`absolute right-2 top-2 bottom-2 w-12 rounded-xl flex items-center justify-center transition-all shadow-lg ${inputValue.trim() && !isTyping
                             ? 'bg-red-600 text-white hover:bg-red-700'
                             : 'bg-gray-300 text-gray-500'
                             }`}
@@ -270,7 +411,8 @@ export default function ChatPage() {
                         <button
                             key={action}
                             onClick={() => handleSendMessage(action)}
-                            className="px-4 py-2 bg-gray-50 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-xl text-xs font-bold text-gray-600 hover:text-red-600 whitespace-nowrap transition-all"
+                            disabled={isTyping}
+                            className="px-4 py-2 bg-gray-50 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-xl text-xs font-bold text-gray-600 hover:text-red-600 whitespace-nowrap transition-all disabled:opacity-50"
                         >
                             {action}
                         </button>

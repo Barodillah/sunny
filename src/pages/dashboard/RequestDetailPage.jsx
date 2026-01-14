@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -22,36 +22,74 @@ import {
     CalendarCheck,
     PackageCheck
 } from 'lucide-react';
-
-const STATUS_STEPS = [
-    { id: 'pending', label: 'Pending Review', date: 'Jan 12, 10:30 AM' },
-    { id: 'processed', label: 'In Progress', date: 'Jan 12, 11:00 AM' },
-    { id: 'completed', label: 'Completed', date: 'Jan 12, 02:15 PM' },
-];
+import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const RequestDetailPage = () => {
+    console.log("RequestDetailPage rendered");
     const navigate = useNavigate();
     const { id } = useParams();
+    console.log("Request ID:", id);
     const location = useLocation();
 
-    // Fallback data if accessed directly without state
-    const data = location.state?.data || {
-        id: id,
-        type: "Service Booking",
-        user: "Budi Santoso",
-        phone: "+6281234567890",
-        email: "budisantoso@example.com",
-        date: "Jan 12, 10:30 AM",
-        status: "pending",
-        vehicle: "Mitsubishi Xpander Ultimate 2023",
-        notes: "Requesting 10.000KM periodic service. Prefer weekend slot.",
-        sessionId: "SESS-892"
+    // Initial state from navigation or null
+    const [request, setRequest] = useState(location.state?.data || null);
+    const [loading, setLoading] = useState(!location.state?.data);
+    const [statusHistory, setStatusHistory] = useState([]);
+
+    useEffect(() => {
+        fetchRequestDetails();
+        // eslint-disable-next-line
+    }, [id]);
+
+    const fetchRequestDetails = async () => {
+        try {
+            const response = await axios.get(`${import.meta.env.VITE_API_URL}/requests/${id}`);
+            setRequest(response.data);
+            setStatusHistory(response.data.history || []);
+            setLoading(false);
+        } catch (error) {
+            console.error('Error fetching request:', error);
+            toast.error('Failed to load request details');
+            setLoading(false);
+        }
     };
 
-    const [currentStatus, setCurrentStatus] = useState(data.status);
+    const handleStatusChange = async (newStatus) => {
+        const confirmChange = window.confirm(`Change status to ${newStatus}?`);
+        if (!confirmChange) return;
 
-    const handleStatusChange = (newStatus) => {
-        setCurrentStatus(newStatus);
+        try {
+            await axios.put(`${import.meta.env.VITE_API_URL}/requests/${id}/status`, {
+                status: newStatus,
+                label: getStatusLabel(newStatus)
+            });
+            toast.success('Status updated successfully');
+            fetchRequestDetails(); // Refresh data and history
+        } catch (error) {
+            console.error('Error updating status:', error);
+            toast.error('Failed to update status');
+        }
+    };
+
+    const getStatusLabel = (status) => {
+        switch (status) {
+            case 'pending': return 'Pending Review';
+            case 'processed': return 'In Progress';
+            case 'completed': return 'Completed';
+            case 'cancelled': return 'Cancelled';
+            default: return status;
+        }
+    };
+
+    const formatDate = (dateString) => {
+        if (!dateString) return '-';
+        return new Date(dateString).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
     };
 
     const getTypeIcon = (type) => {
@@ -103,6 +141,22 @@ const RequestDetailPage = () => {
         }
     };
 
+    if (loading) {
+        return <div className="p-8 text-center text-gray-500">Loading details...</div>;
+    }
+
+    if (!request) {
+        return <div className="p-8 text-center text-red-500">Request not found</div>;
+    }
+
+    // Parse details if JSON string, otherwise use as is or empty object
+    let details = {};
+    if (typeof request.details === 'string') {
+        try { details = JSON.parse(request.details); } catch (e) { }
+    } else if (typeof request.details === 'object') {
+        details = request.details || {};
+    }
+
     return (
         <div className="space-y-6 max-w-5xl mx-auto">
             {/* Header */}
@@ -116,13 +170,13 @@ const RequestDetailPage = () => {
                     </button>
                     <div>
                         <div className="flex items-center gap-3">
-                            {getTypeIcon(data.type)}
-                            <h1 className="text-2xl font-black text-gray-900">{data.type}</h1>
+                            {getTypeIcon(request.type)}
+                            <h1 className="text-2xl font-black text-gray-900">{request.type}</h1>
                             <span className="bg-gray-100 text-gray-500 px-3 py-1 rounded-lg text-xs font-mono font-bold">
-                                {data.id}
+                                {request.id}
                             </span>
                         </div>
-                        <p className="text-gray-500 text-sm font-medium">Request from {data.user}</p>
+                        <p className="text-gray-500 text-sm font-medium">Request from {request.name}</p>
                     </div>
                 </div>
 
@@ -130,19 +184,20 @@ const RequestDetailPage = () => {
                     <button className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 shadow-sm">
                         <Printer size={18} /> Print
                     </button>
-                    {data.sessionId && (
+                    {request.session_id && (
                         <button
-                            onClick={() => navigate(`/dashboard/history/${data.sessionId}`)}
+                            onClick={() => navigate(`/dashboard/history/${request.session_id}`)}
                             className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 shadow-sm"
                         >
                             <MessageSquare size={18} /> View Chat
                         </button>
                     )}
                     <div className="relative group">
-                        <button className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest text-white shadow-lg transition-all ${currentStatus === 'completed' ? 'bg-green-600 shadow-green-200' :
-                            currentStatus === 'cancelled' ? 'bg-red-600 shadow-red-200' : 'bg-yellow-400 text-black shadow-yellow-200'
+                        <button className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest text-white shadow-lg transition-all ${request.status === 'completed' ? 'bg-green-600 shadow-green-200' :
+                            request.status === 'cancelled' ? 'bg-red-600 shadow-red-200' :
+                                request.status === 'processed' ? 'bg-blue-600 shadow-blue-200' : 'bg-yellow-400 text-black shadow-yellow-200'
                             }`}>
-                            {currentStatus} <ChevronDown size={16} />
+                            {request.status} <ChevronDown size={16} />
                         </button>
 
                         {/* Status Dropdown */}
@@ -173,11 +228,11 @@ const RequestDetailPage = () => {
                         <div className="flex items-start justify-between mb-8">
                             <div className="flex items-center gap-6">
                                 <div className="w-20 h-20 rounded-3xl bg-gray-900 text-white flex items-center justify-center text-3xl font-black">
-                                    {data.user.charAt(0)}
+                                    {(request.name || 'U').charAt(0)}
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-black text-gray-900 mb-1">{data.user}</h3>
-                                    <p className="text-gray-500 text-sm font-medium mb-4">Customer since Jan 2024</p>
+                                    <h3 className="text-xl font-black text-gray-900 mb-1">{request.name}</h3>
+                                    <p className="text-gray-500 text-sm font-medium mb-4">Customer</p>
                                     <div className="flex gap-2">
                                         <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1">
                                             <MessageCircle size={12} /> WhatsApp Available
@@ -186,10 +241,16 @@ const RequestDetailPage = () => {
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                <button className="p-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-colors">
+                                <button
+                                    onClick={() => window.open(`https://wa.me/${request.phone.replace(/\+/g, '')}`, '_blank')}
+                                    className="p-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-colors"
+                                >
                                     <MessageCircle size={20} />
                                 </button>
-                                <button className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors">
+                                <button
+                                    onClick={() => window.location.href = `tel:${request.phone}`}
+                                    className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
+                                >
                                     <Phone size={20} />
                                 </button>
                             </div>
@@ -202,7 +263,7 @@ const RequestDetailPage = () => {
                                 </div>
                                 <div>
                                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Phone Number</span>
-                                    <span className="font-bold text-gray-900 text-sm">{data.phone}</span>
+                                    <span className="font-bold text-gray-900 text-sm">{request.phone}</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4">
@@ -211,7 +272,7 @@ const RequestDetailPage = () => {
                                 </div>
                                 <div>
                                     <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Email Address</span>
-                                    <span className="font-bold text-gray-900 text-sm">{data.email}</span>
+                                    <span className="font-bold text-gray-900 text-sm">{request.email || '-'}</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4">
@@ -241,7 +302,7 @@ const RequestDetailPage = () => {
                                     <Car className="text-red-600" size={20} />
                                     <h4 className="font-bold text-gray-900">Vehicle Details</h4>
                                 </div>
-                                <p className="text-gray-600 pl-8">{data.vehicle}</p>
+                                <p className="text-gray-600 pl-8">{request.vehicle || '-'}</p>
                             </div>
 
                             <div className="pb-6 border-b border-gray-100">
@@ -249,20 +310,38 @@ const RequestDetailPage = () => {
                                     <AlertCircle className="text-yellow-500" size={20} />
                                     <h4 className="font-bold text-gray-900">User Notes</h4>
                                 </div>
-                                <p className="text-gray-600 pl-8 italic">"{data.notes}"</p>
+                                <p className="text-gray-600 pl-8 italic">"{request.notes || '-'}"</p>
                             </div>
+
+                            {/* Display Dynamic Details */}
+                            {Object.keys(details).length > 0 && (
+                                <div className="pb-6 border-b border-gray-100">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <Tag className="text-blue-500" size={20} />
+                                        <h4 className="font-bold text-gray-900">Additional Details</h4>
+                                    </div>
+                                    <div className="pl-8 grid grid-cols-2 gap-4">
+                                        {Object.entries(details).map(([key, value]) => (
+                                            <div key={key}>
+                                                <span className="text-xs text-gray-400 font-bold block mb-1 capitalize">{key.replace(/_/g, ' ')}</span>
+                                                <span className="text-sm text-gray-700 font-medium">{(value === null || value === undefined) ? '-' : value.toString()}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <span className="text-xs text-gray-400 font-bold block mb-1">Created At</span>
                                     <div className="flex items-center gap-2 text-gray-900 font-bold">
-                                        <Calendar size={16} /> {data.date}
+                                        <Calendar size={16} /> {formatDate(request.created_at)}
                                     </div>
                                 </div>
                                 <div>
                                     <span className="text-xs text-gray-400 font-bold block mb-1">Due Date</span>
                                     <div className="flex items-center gap-2 text-gray-900 font-bold">
-                                        <Clock size={16} /> Jan 13, 09:00 AM
+                                        <Clock size={16} /> -
                                     </div>
                                 </div>
                             </div>
@@ -276,17 +355,17 @@ const RequestDetailPage = () => {
                     <div className="bg-gray-950 text-white p-8 rounded-[2.5rem] shadow-xl shadow-gray-200">
                         <h3 className="text-lg font-black mb-6">Quick Actions</h3>
 
-                        {renderTypeSpecificActions(data.type)}
+                        {renderTypeSpecificActions(request.type)}
 
-                        <div className={`${renderTypeSpecificActions(data.type) ? 'mt-6 pt-6 border-t border-gray-800' : ''} space-y-3`}>
+                        <div className={`${renderTypeSpecificActions(request.type) ? 'mt-6 pt-6 border-t border-gray-800' : ''} space-y-3`}>
                             <button
-                                onClick={() => window.open(`https://wa.me/${data.phone.replace(/\+/g, '')}`, '_blank')}
+                                onClick={() => window.open(`https://wa.me/${(request.phone || '').replace(/\+/g, '')}`, '_blank')}
                                 className="w-full flex items-center justify-center gap-3 bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold transition-all"
                             >
                                 <MessageCircle size={20} /> Chat WhatsApp
                             </button>
                             <button
-                                onClick={() => window.location.href = `mailto:${data.email}`}
+                                onClick={() => window.location.href = `mailto:${request.email}`}
                                 className="w-full flex items-center justify-center gap-3 bg-white/10 hover:bg-white/20 text-white py-4 rounded-xl font-bold transition-all"
                             >
                                 <Mail size={20} /> Send Email
@@ -305,14 +384,18 @@ const RequestDetailPage = () => {
                     <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl shadow-gray-50">
                         <h3 className="text-lg font-black text-gray-900 mb-6">Status History</h3>
                         <div className="relative pl-4 border-l-2 border-gray-100 space-y-8">
-                            {STATUS_STEPS.map((step, i) => (
-                                <div key={i} className="relative">
-                                    <div className={`absolute -left-[21px] top-0 w-4 h-4 rounded-full border-2 ${i === 0 ? 'bg-red-600 border-red-600' : 'bg-white border-gray-300'
-                                        }`} />
-                                    <p className="text-sm font-bold text-gray-900 mb-1">{step.label}</p>
-                                    <p className="text-xs text-gray-500 font-medium">{step.date}</p>
-                                </div>
-                            ))}
+                            {statusHistory.length > 0 ? (
+                                statusHistory.map((step, i) => (
+                                    <div key={i} className="relative">
+                                        <div className={`absolute -left-[21px] top-0 w-4 h-4 rounded-full border-2 ${i === 0 ? 'bg-red-600 border-red-600' : 'bg-white border-gray-300'
+                                            }`} />
+                                        <p className="text-sm font-bold text-gray-900 mb-1">{step.label}</p>
+                                        <p className="text-xs text-gray-500 font-medium">{formatDate(step.created_at)}</p>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-sm text-gray-500">No history available</p>
+                            )}
                         </div>
                     </div>
                 </div>

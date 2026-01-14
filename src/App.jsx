@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Toaster } from 'react-hot-toast';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import {
     MessageCircle,
@@ -32,11 +33,6 @@ import KnowledgeFormPage from './pages/dashboard/KnowledgeFormPage';
 // --- Constants & Mock Data ---
 const MITSUBISHI_RED = "#E60012";
 
-const PROMOS = [
-    { id: 1, title: "Promo Merdeka Xpander", desc: "Bunga 0% hingga 2 tahun & Gratis Asuransi.", img: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=800" },
-    { id: 2, title: "Pajero Sport Special Edition", desc: "DP Ringan mulai 15% & Voucher Aksesoris 10jt.", img: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=800" },
-    { id: 3, title: "Service Hemat Berkala", desc: "Diskon Jasa 20% khusus booking via Sunny AI.", img: "https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&q=80&w=800" },
-];
 
 const SERVICES = [
     { icon: <Car className="w-8 h-8" />, title: "Penjualan", desc: "Konsultasi unit baru Mitsubishi." },
@@ -81,7 +77,7 @@ const Hero = ({ onOpenChat }) => (
         <div className="absolute inset-0 z-0">
             <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent z-10" />
             <img
-                src="https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=100&w=1920"
+                src="hero.jpg"
                 className="w-full h-full object-cover opacity-90 object-center"
                 alt="Mitsubishi Xpander"
             />
@@ -224,11 +220,11 @@ const Footer = () => (
                     <ul className="space-y-6 text-gray-300 font-medium">
                         <li className="flex gap-4 text-sm leading-relaxed">
                             <MapPin className="w-6 h-6 text-red-500 shrink-0" />
-                            Jl. Raya Bekasi KM 21, Medan Satria, Kota Bekasi, Jawa Barat
+                            Jl. Ir. H. Juanda No. 35 Bulak Kapal – Bekasi Timur
                         </li>
                         <li className="flex gap-4 text-sm items-center">
                             <Phone className="w-6 h-6 text-red-500 shrink-0" />
-                            (021) 8884 1234
+                            (021) 8834 7777
                         </li>
                         <li className="flex gap-4 text-sm">
                             <Clock className="w-6 h-6 text-red-500 shrink-0" />
@@ -319,26 +315,47 @@ const LandingPage = () => {
 
 export default function App() {
     return (
-        <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/dashboard" element={<DashboardLayout />}>
-                <Route index element={<DashboardHome />} />
-                <Route path="request" element={<RequestPage />} />
-                <Route path="request/:id" element={<RequestDetailPage />} />
-                <Route path="promo" element={<PromoPage />} />
-                <Route path="knowledge" element={<KnowledgePage />} />
-                <Route path="knowledge/add" element={<KnowledgeFormPage />} />
-                <Route path="knowledge/edit/:id" element={<KnowledgeFormPage />} />
-                <Route path="history" element={<HistoryPage />} />
-                <Route path="history/:id" element={<HistoryDetailPage />} />
-            </Route>
-        </Routes>
+        <>
+            <Toaster position="top-center" />
+            <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/chat" element={<ChatPage />} />
+                <Route path="/dashboard" element={<DashboardLayout />}>
+                    <Route index element={<DashboardHome />} />
+                    <Route path="request" element={<RequestPage />} />
+                    <Route path="request/:id" element={<RequestDetailPage />} />
+                    <Route path="promo" element={<PromoPage />} />
+                    <Route path="knowledge" element={<KnowledgePage />} />
+                    <Route path="knowledge/add" element={<KnowledgeFormPage />} />
+                    <Route path="knowledge/edit/:id" element={<KnowledgeFormPage />} />
+                    <Route path="history" element={<HistoryPage />} />
+                    <Route path="history/:id" element={<HistoryDetailPage />} />
+                </Route>
+            </Routes>
+        </>
     );
 }
 
 const PromoCarousel = () => {
     const [active, setActive] = useState(0);
+    const [promos, setPromos] = useState([]);
+
+    useEffect(() => {
+        const fetchPromos = async () => {
+            try {
+                const response = await fetch(`${import.meta.env.VITE_API_URL}/promos`);
+                const data = await response.json();
+                // Filter only active promos
+                setPromos(data.filter(p => p.is_active));
+            } catch (error) {
+                console.error('Error fetching promos:', error);
+            }
+        };
+        fetchPromos();
+    }, []);
+
+    if (promos.length === 0) return null;
+
     return (
         <div className="py-32 container mx-auto px-6 overflow-hidden">
             <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-8">
@@ -349,13 +366,13 @@ const PromoCarousel = () => {
                 </div>
                 <div className="flex gap-4">
                     <button
-                        onClick={() => setActive(prev => (prev > 0 ? prev - 1 : PROMOS.length - 1))}
+                        onClick={() => setActive(prev => (prev > 0 ? prev - 1 : promos.length - 1))}
                         className="p-5 rounded-2xl bg-white shadow-xl hover:bg-gray-900 hover:text-white transition-all border border-gray-100"
                     >
                         <ChevronLeft className="w-6 h-6" />
                     </button>
                     <button
-                        onClick={() => setActive(prev => (prev < PROMOS.length - 1 ? prev + 1 : 0))}
+                        onClick={() => setActive(prev => (prev < promos.length - 1 ? prev + 1 : 0))}
                         className="p-5 rounded-2xl bg-white shadow-xl hover:bg-gray-900 hover:text-white transition-all border border-gray-100"
                     >
                         <ChevronRight className="w-6 h-6" />
@@ -368,13 +385,13 @@ const PromoCarousel = () => {
                     className="flex transition-transform duration-700 cubic-bezier(0.4, 0, 0.2, 1) gap-8"
                     style={{ transform: `translateX(-${active * (window.innerWidth < 768 ? 90 : 40)}%)` }}
                 >
-                    {PROMOS.map((promo) => (
+                    {promos.map((promo) => (
                         <div key={promo.id} className="min-w-[90%] md:min-w-[450px] h-[550px] relative rounded-[3rem] overflow-hidden group shadow-2xl shadow-gray-200">
-                            <img src={promo.img} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" />
+                            <img src={promo.image_url} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" alt={promo.title} />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-12 flex flex-col justify-end">
                                 <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full w-fit mb-4">Limited Slot</span>
                                 <h4 className="text-3xl font-black text-white mb-3">{promo.title}</h4>
-                                <p className="text-gray-300 mb-8 font-medium leading-relaxed">{promo.desc}</p>
+                                <p className="text-gray-300 mb-8 font-medium leading-relaxed">{promo.description}</p>
                                 <button className="bg-white text-black py-4 px-8 rounded-2xl font-black uppercase tracking-widest text-xs w-fit hover:bg-yellow-400 transition-all shadow-lg">
                                     Ambil Promo
                                 </button>

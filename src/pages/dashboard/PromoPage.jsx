@@ -1,15 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Edit2, Trash2, Image as ImageIcon, X, Save, Tag } from 'lucide-react';
+import { Plus, Edit2, Trash2, Image as ImageIcon, X, Save, Tag, Loader2 } from 'lucide-react';
 
-const INITIAL_PROMOS = [
-    { id: 1, code: "MERDEKA2024", title: "Promo Merdeka Xpander", desc: "Bunga 0% hingga 2 tahun & Gratis Asuransi.", img: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=800", active: true },
-    { id: 2, code: "PAJEROVIP", title: "Pajero Sport Special", desc: "DP Ringan mulai 15% & Voucher Aksesoris 10jt.", img: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=800", active: true },
-    { id: 3, code: "SERVICE20", title: "Service Hemat Berkala", desc: "Diskon Jasa 20% khusus booking via Sunny AI.", img: "https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&q=80&w=800", active: false },
-];
+const API_URL = import.meta.env.VITE_API_URL;
 
 const PromoPage = () => {
-    const [promos, setPromos] = useState(INITIAL_PROMOS);
+    const [promos, setPromos] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [currentId, setCurrentId] = useState(null);
@@ -17,13 +15,31 @@ const PromoPage = () => {
     const [formData, setFormData] = useState({
         code: '',
         title: '',
-        desc: '',
-        img: '',
-        active: true
+        description: '',
+        image_url: '',
+        is_active: true
     });
 
+    // Fetch promos on mount
+    useEffect(() => {
+        fetchPromos();
+    }, []);
+
+    const fetchPromos = async () => {
+        try {
+            setLoading(true);
+            const response = await fetch(`${API_URL}/promos`);
+            const data = await response.json();
+            setPromos(data);
+        } catch (error) {
+            console.error('Error fetching promos:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const resetForm = () => {
-        setFormData({ code: '', title: '', desc: '', img: '', active: true });
+        setFormData({ code: '', title: '', description: '', image_url: '', is_active: true });
         setIsEditing(false);
         setCurrentId(null);
     };
@@ -34,28 +50,67 @@ const PromoPage = () => {
     };
 
     const handleOpenEdit = (promo) => {
-        setFormData(promo);
+        setFormData({
+            code: promo.code,
+            title: promo.title,
+            description: promo.description,
+            image_url: promo.image_url || '',
+            is_active: promo.is_active
+        });
         setIsEditing(true);
         setCurrentId(promo.id);
         setIsModalOpen(true);
     };
 
-    const handleDelete = (id) => {
+    const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this promo?')) {
-            setPromos(prev => prev.filter(p => p.id !== id));
+            try {
+                await fetch(`${API_URL}/promos/${id}`, { method: 'DELETE' });
+                setPromos(prev => prev.filter(p => p.id !== id));
+            } catch (error) {
+                console.error('Error deleting promo:', error);
+            }
         }
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        if (isEditing) {
-            setPromos(prev => prev.map(p => p.id === currentId ? { ...formData, id: currentId } : p));
-        } else {
-            setPromos(prev => [...prev, { ...formData, id: Date.now() }]);
+        setSaving(true);
+
+        try {
+            if (isEditing) {
+                const response = await fetch(`${API_URL}/promos/${currentId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                const updated = await response.json();
+                setPromos(prev => prev.map(p => p.id === currentId ? { ...p, ...updated } : p));
+            } else {
+                const response = await fetch(`${API_URL}/promos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                const newPromo = await response.json();
+                setPromos(prev => [newPromo, ...prev]);
+            }
+            setIsModalOpen(false);
+            resetForm();
+        } catch (error) {
+            console.error('Error saving promo:', error);
+        } finally {
+            setSaving(false);
         }
-        setIsModalOpen(false);
-        resetForm();
     };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-red-600" />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -83,16 +138,16 @@ const PromoPage = () => {
                         className="bg-white rounded-[2rem] border border-gray-100 shadow-xl shadow-gray-50 overflow-hidden group flex flex-col h-full"
                     >
                         <div className="h-48 relative overflow-hidden bg-gray-100">
-                            {promo.img ? (
-                                <img src={promo.img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={promo.title} />
+                            {promo.image_url ? (
+                                <img src={promo.image_url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={promo.title} />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-gray-400">
                                     <ImageIcon size={48} />
                                 </div>
                             )}
                             <div className="absolute top-4 right-4 flex gap-2">
-                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${promo.active ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'}`}>
-                                    {promo.active ? 'Active' : 'Inactive'}
+                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${promo.is_active ? 'bg-green-500 text-white' : 'bg-gray-500 text-white'}`}>
+                                    {promo.is_active ? 'Active' : 'Inactive'}
                                 </span>
                             </div>
                             <div className="absolute bottom-4 left-4">
@@ -103,7 +158,7 @@ const PromoPage = () => {
                         </div>
                         <div className="p-6 flex-1 flex flex-col">
                             <h3 className="text-lg font-black text-gray-900 mb-2">{promo.title}</h3>
-                            <p className="text-gray-500 text-sm font-medium leading-relaxed mb-6 line-clamp-2">{promo.desc}</p>
+                            <p className="text-gray-500 text-sm font-medium leading-relaxed mb-6 line-clamp-2">{promo.description}</p>
 
                             <div className="mt-auto flex gap-2">
                                 <button
@@ -189,9 +244,8 @@ const PromoPage = () => {
                                                 <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                                 <input
                                                     type="url"
-                                                    required
-                                                    value={formData.img}
-                                                    onChange={(e) => setFormData({ ...formData, img: e.target.value })}
+                                                    value={formData.image_url}
+                                                    onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
                                                     placeholder="https://..."
                                                     className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-12 pr-4 font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 transition-all"
                                                 />
@@ -203,16 +257,16 @@ const PromoPage = () => {
                                             <textarea
                                                 required
                                                 rows="3"
-                                                value={formData.desc}
-                                                onChange={(e) => setFormData({ ...formData, desc: e.target.value })}
+                                                value={formData.description}
+                                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                                 placeholder="Promo details..."
                                                 className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 transition-all resize-none"
                                             />
                                         </div>
 
-                                        <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer" onClick={() => setFormData({ ...formData, active: !formData.active })}>
-                                            <div className={`w-12 h-6 rounded-full p-1 transition-colors ${formData.active ? 'bg-green-500' : 'bg-gray-300'}`}>
-                                                <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${formData.active ? 'translate-x-6' : 'translate-x-0'}`} />
+                                        <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer" onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}>
+                                            <div className={`w-12 h-6 rounded-full p-1 transition-colors ${formData.is_active ? 'bg-green-500' : 'bg-gray-300'}`}>
+                                                <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${formData.is_active ? 'translate-x-6' : 'translate-x-0'}`} />
                                             </div>
                                             <span className="text-sm font-bold text-gray-600">Active Status</span>
                                         </div>
@@ -228,9 +282,11 @@ const PromoPage = () => {
                                         </button>
                                         <button
                                             type="submit"
-                                            className="flex-1 bg-red-600 text-white py-4 rounded-xl font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-200 flex items-center justify-center gap-2"
+                                            disabled={saving}
+                                            className="flex-1 bg-red-600 text-white py-4 rounded-xl font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-200 flex items-center justify-center gap-2 disabled:opacity-50"
                                         >
-                                            <Save size={18} /> Save Promo
+                                            {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                            {saving ? 'Saving...' : 'Save Promo'}
                                         </button>
                                     </div>
                                 </form>
