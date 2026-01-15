@@ -5,6 +5,7 @@ import promoRoutes from './routes/promos.js';
 import knowledgeRoutes from './routes/knowledge.js';
 import chatRoutes from './routes/chat.js';
 import requestRoutes from './routes/requests.js';
+import authRoutes from './routes/auth.js';
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/promos', promoRoutes);
 app.use('/api/knowledge', knowledgeRoutes);
 app.use('/api/chat', chatRoutes);

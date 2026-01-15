@@ -29,6 +29,9 @@ import HistoryPage from './pages/dashboard/HistoryPage';
 import HistoryDetailPage from './pages/dashboard/HistoryDetailPage';
 import RequestDetailPage from './pages/dashboard/RequestDetailPage';
 import KnowledgeFormPage from './pages/dashboard/KnowledgeFormPage';
+import LoginPage from './pages/LoginPage';
+import { AuthProvider } from './context/AuthContext';
+import PrivateRoute from './components/PrivateRoute';
 
 // --- Constants & Mock Data ---
 const MITSUBISHI_RED = "#E60012";
@@ -250,10 +253,11 @@ const Footer = () => (
             </div>
 
             <div className="border-t border-white/5 pt-10 flex flex-col md:flex-row justify-between items-center text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] gap-6">
-                <p>© 2024 Mitsubishi SUN Bekasi. Excellence in Service.</p>
+                <p>© {new Date().getFullYear()} Mitsubishi SUN Bekasi. Excellence in Service.</p>
                 <div className="flex gap-10">
-                    <a href="#" className="hover:text-white transition-colors">Privacy</a>
-                    <a href="#" className="hover:text-white transition-colors">Terms</a>
+                    <a href="/dashboard" className="hover:text-white transition-colors">Dashboard</a>
+                    <a href="/privacy" className="hover:text-white transition-colors">Privacy</a>
+                    <a href="/terms" className="hover:text-white transition-colors">Terms</a>
                 </div>
             </div>
         </div>
@@ -315,12 +319,17 @@ const LandingPage = () => {
 
 export default function App() {
     return (
-        <>
+        <AuthProvider>
             <Toaster position="top-center" />
             <Routes>
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/chat" element={<ChatPage />} />
-                <Route path="/dashboard" element={<DashboardLayout />}>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/dashboard" element={
+                    <PrivateRoute>
+                        <DashboardLayout />
+                    </PrivateRoute>
+                }>
                     <Route index element={<DashboardHome />} />
                     <Route path="request" element={<RequestPage />} />
                     <Route path="request/:id" element={<RequestDetailPage />} />
@@ -332,7 +341,7 @@ export default function App() {
                     <Route path="history/:id" element={<HistoryDetailPage />} />
                 </Route>
             </Routes>
-        </>
+        </AuthProvider>
     );
 }
 
