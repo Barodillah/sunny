@@ -28,6 +28,36 @@ const NAV_TYPES = [
     { id: 'testdrive', label: 'Test Drive', icon: Car },
 ];
 
+// Format message with bold (**text**) and line breaks
+function formatMessage(text) {
+    if (!text) return null;
+
+    // Split by line breaks first
+    const lines = text.split(/\n/);
+
+    return lines.map((line, lineIndex) => {
+        // Split by bold markers
+        const parts = line.split(/(\*\*[^*]+\*\*)/);
+
+        const formattedParts = parts.map((part, partIndex) => {
+            // Check if this part is bold (wrapped in **)
+            if (part.startsWith('**') && part.endsWith('**')) {
+                const boldText = part.slice(2, -2);
+                return <strong key={`${lineIndex}-${partIndex}`}>{boldText}</strong>;
+            }
+            return part;
+        });
+
+        // Return line with break if not the last line
+        return (
+            <React.Fragment key={lineIndex}>
+                {formattedParts}
+                {lineIndex < lines.length - 1 && <br />}
+            </React.Fragment>
+        );
+    });
+}
+
 export default function ChatPage() {
     const navigate = useNavigate();
     const location = useLocation();
@@ -134,17 +164,38 @@ export default function ChatPage() {
 
                 // Update collected data
                 if (data.collected_data) {
+                    // Show toast when name is first captured
+                    if (data.collected_data.name && !collectedData.name) {
+                        toast.success(
+                            <div className="flex items-center gap-2">
+                                <span>👋 Halo <strong>{data.collected_data.name}</strong>!</span>
+                            </div>,
+                            { duration: 3000, style: { background: '#1f2937', color: '#fff' } }
+                        );
+                    }
                     setCollectedData(prev => ({ ...prev, ...data.collected_data }));
                 }
 
                 // Show toast if request was created
                 if (data.requestId) {
                     toast.success(
-                        <div className="flex items-center gap-2">
-                            <CheckCircle size={18} />
-                            <span>Data berhasil dikumpulkan! Request ID: <strong>{data.requestId}</strong></span>
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 font-bold">
+                                <CheckCircle size={18} />
+                                <span>Request Berhasil Dikirim!</span>
+                            </div>
+                            <div className="text-xs opacity-80">
+                                ID: <strong>{data.requestId}</strong> • Tim kami akan segera menghubungi Anda
+                            </div>
                         </div>,
-                        { duration: 5000 }
+                        {
+                            duration: 6000,
+                            style: {
+                                background: '#16a34a',
+                                color: '#fff',
+                                padding: '16px'
+                            }
+                        }
                     );
                 }
 
@@ -180,6 +231,9 @@ export default function ChatPage() {
     const handleBack = async () => {
         // End current session before navigating back
         if (sessionId) {
+            const loadingToast = toast.loading('Menyimpan percakapan...', {
+                style: { background: '#1f2937', color: '#fff' }
+            });
             try {
                 await fetch(`${API_BASE}/chat/end`, {
                     method: 'POST',
@@ -187,8 +241,10 @@ export default function ChatPage() {
                     body: JSON.stringify({ sessionId })
                 });
                 localStorage.removeItem('chatSessionId');
+                toast.success('Percakapan tersimpan!', { id: loadingToast, duration: 1500 });
             } catch (e) {
                 console.error('Failed to end session:', e);
+                toast.error('Gagal menyimpan percakapan', { id: loadingToast });
             }
         }
         navigate('/');
@@ -205,14 +261,19 @@ export default function ChatPage() {
     const handleNewChat = async () => {
         // End current session
         if (sessionId) {
+            const loadingToast = toast.loading('Menyimpan percakapan...', {
+                style: { background: '#1f2937', color: '#fff' }
+            });
             try {
                 await fetch(`${API_BASE}/chat/end`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ sessionId })
                 });
+                toast.success('Percakapan tersimpan!', { id: loadingToast, duration: 1500 });
             } catch (e) {
                 console.error('Failed to end session:', e);
+                toast.error('Gagal menyimpan percakapan', { id: loadingToast });
             }
         }
 
@@ -225,6 +286,9 @@ export default function ChatPage() {
         processedInit.current = false;
 
         // Create new session
+        const creatingToast = toast.loading('Membuat chat baru...', {
+            style: { background: '#1f2937', color: '#fff' }
+        });
         try {
             const response = await fetch(`${API_BASE}/chat/session`, {
                 method: 'POST',
@@ -236,9 +300,13 @@ export default function ChatPage() {
                 setSessionId(data.sessionId);
                 setMessages([data.message]);
                 localStorage.setItem('chatSessionId', data.sessionId);
+                toast.success('Chat baru dimulai!', { id: creatingToast, duration: 1500 });
+            } else {
+                throw new Error('Failed to create session');
             }
         } catch (error) {
             console.error('Failed to create new session:', error);
+            toast.error('Gagal membuat chat baru', { id: creatingToast });
         }
     };
 
@@ -348,7 +416,7 @@ export default function ChatPage() {
                                 ? 'bg-red-600 text-white rounded-br-md'
                                 : 'bg-white text-gray-800 rounded-bl-md border border-gray-100'
                                 }`}>
-                                {m.content}
+                                {formatMessage(m.content)}
                             </div>
                         </motion.div>
                     ))}

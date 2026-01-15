@@ -36,8 +36,8 @@ const HistoryDetailPage = () => {
                         user: session.guest_name || `Guest_${session.id.replace('SESS-', '')}`,
                         summary: session.summary || 'Chat session',
                         duration: duration > 0 ? `${minutes}m ${seconds}s` : 'Active',
-                        time: startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-                        date: startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+                        time: startDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }),
+                        date: startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Jakarta' }),
                         requestId: session.request_id
                     });
 

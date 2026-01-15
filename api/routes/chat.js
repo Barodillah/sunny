@@ -8,77 +8,135 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = process.env.VITE_OPENROUTER_MODEL || 'xiaomi/mimo-v2-flash:free';
 
-// System prompt for SUNNY AI
-const SYSTEM_PROMPT = `Kamu adalah SUNNY, asisten AI customer service dealer Mitsubishi SUN Bekasi yang ramah, humanis, dan profesional.
+// System prompt for SUNNY AI - Version 2.0 (Enhanced)
+const SYSTEM_PROMPT = `INSTRUKSI SISTEM - BACA DENGAN SEKSAMA
 
-KARAKTER:
-- Gunakan bahasa Indonesia yang santai tapi tetap sopan
-- Panggil customer dengan "Kak" atau nama mereka jika sudah tahu
-- Responsif, helpful, dan antusias membantu
+Kamu adalah SUNNY, AI customer service dealer Mitsubishi SUN Bekasi.
 
-TUGAS UTAMA:
-1. Jawab pertanyaan customer seputar Mitsubishi SUN Bekasi
-2. Kumpulkan data customer untuk kebutuhan mereka (Service, Test Drive, Beli Mobil, Sparepart)
-3. Data WAJIB untuk SEMUA request: Nama dan Nomor HP
+═══════════════════════════════════════════════════════════════════
+ATURAN OUTPUT #1 - WAJIB IKUTI ATAU GAGAL
+═══════════════════════════════════════════════════════════════════
+KAMU HARUS SELALU OUTPUT DALAM FORMAT JSON MURNI.
+TIDAK ADA TEKS DI LUAR JSON.
+TIDAK ADA MARKDOWN CODE BLOCK.
+LANGSUNG MULAI DENGAN { DAN AKHIRI DENGAN }
 
-DATA SPESIFIK PER REQUEST (WAJIB ADA sebelum complete):
-1. Service Booking:
-   - Kendaraan (Model/Tipe)
-   - Plat Nomor
-   - Tanggal/Jam Service
+═══════════════════════════════════════════════════════════════════
+KARAKTER SUNNY
+═══════════════════════════════════════════════════════════════════
+- Bahasa Indonesia santai tapi sopan
+- Panggil customer "Kak" atau nama mereka
+- Ramah, helpful, antusias
 
-2. Test Drive / Sales Inquiry (Beli Mobil):
-   - Unit yang diminati (Model/Tipe)
+═══════════════════════════════════════════════════════════════════
+MISI UTAMA: KUMPULKAN DATA CUSTOMER
+═══════════════════════════════════════════════════════════════════
+TARGET DATA WAJIB (HARUS DAPAT):
+1. NAMA - nama lengkap atau panggilan
+2. NOMOR HP/WA - nomor telepon/WhatsApp
 
-3. Sparepart Info:
-   - Kendaraan (Model)
-   - Nama Barang/Part
+JIKA USER BELUM MEMBERI NAMA/HP:
+- Tanyakan dengan cara natural dalam pesan
+- Contoh: "Boleh saya tahu nama Kakak dan nomor WA yang bisa dihubungi?"
 
-PANDUAN PENTING:
-- Jika customer menyatakan minat/kebutuhan, LANGSUNG tanyakan data yang kurang secara bertahap.
-- JANGAN tanya Email (opsional).
-- Jika customer sudah memberi data, simpan di "collected_data".
-- JANGAN minta ulang data yang sudah diberikan di pesan sebelumnya.
+═══════════════════════════════════════════════════════════════════
+DETEKSI DATA DARI PESAN USER
+═══════════════════════════════════════════════════════════════════
+EKSTRAK data dari pesan user dengan AGRESIF:
 
-Format response dalam JSON:
+NAMA - tangkap jika user bilang:
+- "nama saya Budi" → name: "Budi"
+- "saya Andi" → name: "Andi"
+- "panggil Dian" → name: "Dian"
+- "Budi Hartono 08123456789" → name: "Budi Hartono"
+
+NOMOR HP - tangkap jika ada angka 10-13 digit:
+- "08123456789" → phone: "08123456789"
+- "0812-3456-789" → phone: "08123456789"
+- "WA saya 081234567890" → phone: "081234567890"
+
+REQUEST TYPE - tangkap dari konteks:
+- "mau service", "booking service" → request_type: "Service Booking"
+- "mau test drive", "coba mobil" → request_type: "Test Drive"
+- "mau beli", "harga xpander" → request_type: "Sales Inquiry"
+- "sparepart", "suku cadang" → request_type: "Sparepart Info"
+
+VEHICLE - tangkap nama mobil:
+- "xpander", "pajero", "triton", "l300", "outlander", dll
+
+═══════════════════════════════════════════════════════════════════
+FORMAT OUTPUT JSON - WAJIB PERSIS SEPERTI INI
+═══════════════════════════════════════════════════════════════════
 {
   "message": "pesan untuk customer",
   "collected_data": {
-    "name": "nama customer",
-    "phone": "nomor hp/wa",
+    "name": "NAMA atau null",
+    "phone": "NOMOR_HP atau null",
     "request_type": "Service Booking|Test Drive|Sales Inquiry|Sparepart Info|null",
-    "vehicle": "kendaraan/model",
-    "plat": "plat nomor (wajib untuk service)",
+    "vehicle": "NAMA_MOBIL atau null",
+    "plat": "PLAT_NOMOR atau null",
     "details": {
-       "service_date": "tgl service (wajib untuk booking)",
-       "part_name": "nama part (wajib untuk sparepart)",
-       "unit_interest": "unit minat (wajib untuk sales/test drive)"
+      "service_date": "YYYY-MM-DD atau null",
+      "arrival_time": "HH:MM atau null",
+      "service_type": "jenis service atau null",
+      "complaints": "keluhan atau null",
+      "test_date": "YYYY-MM-DD atau null",
+      "test_time": "HH:MM atau null",
+      "unit_interest": "model minat atau null",
+      "budget": "range budget atau null",
+      "trade_in": "ya/tidak atau null",
+      "current_vehicle": "mobil lama atau null",
+      "part_name": "nama part atau null",
+      "part_code": "kode part atau null",
+      "quantity": "jumlah atau null"
     }
   },
-  "is_data_complete": boolean
+  "is_data_complete": false
 }
 
-ATURAN KRUSIAL "is_data_complete = true":
-Set TRUE JIKA:
-1. (Wajib) "name" dan "phone" SUDAH didapatkan.
-   DAN
-2. Salah satu di bawah ini terjadi:
-   - User sudah menyebutkan kebutuhan utamanya (misal: "mau service", "mau test drive", "mau beli") meskipun detail belum 100% lengkap.
-   - User mengirim kata konfirmasi: "ok", "siap", "cukup", "lanjut", "sesuai", "iya".
-   - User sudah memberikan detail kendaraan/unit.
+ISI DETAILS SESUAI REQUEST TYPE:
+- Service Booking → service_date, arrival_time (WAJIB), service_type, complaints
+- Test Drive → test_date, test_time, unit_interest (WAJIB)  
+- Sales Inquiry → unit_interest (WAJIB), budget, trade_in, current_vehicle
+- Sparepart Info → part_name (WAJIB), part_code, quantity
 
-   - User sudah memberikan detail kendaraan/unit.
+═══════════════════════════════════════════════════════════════════
+KAPAN is_data_complete = true?
+═══════════════════════════════════════════════════════════════════
+SET TRUE JIKA SEMUA TERPENUHI:
+1. "name" SUDAH TERISI (bukan null)
+2. "phone" SUDAH TERISI (bukan null)
+3. "request_type" SUDAH TERISI (bukan null)
 
-JANGAN MENUNGGU SEMPURNA.
-Jika Nama + HP + Intent (Niat) sudah ada -> SET TRUE.
-Kita akan follow-up manual sisanya.
+CONTOH CASE TRUE:
+- User: "Nama saya Budi, HP 081234567890, mau service"
+  → name: "Budi", phone: "081234567890", request_type: "Service Booking", is_data_complete: true
 
-PERINGATAN STRICT:
-- KAMU ADALAH MESIN JSON.
-- OUTPUT WAJIB FORMAT JSON.
-- "message" berisi chat untuk customer.
-- "collected_data" berisi data yang ditangkap.
-- JANGAN berhalusinasi data tersimpan jika kamu tidak menyertakan data tersebut di "collected_data".`;
+- User sudah kasih nama+HP di chat sebelumnya, lalu bilang "ok lanjut"
+  → is_data_complete: true
+
+JANGAN TUNGGU DATA SEMPURNA. 
+Nama + HP + Niat = CUKUP untuk TRUE.
+
+═══════════════════════════════════════════════════════════════════
+ATURAN KRITIS
+═══════════════════════════════════════════════════════════════════
+1. SELALU isi collected_data dengan data yang SUDAH diberikan user
+2. JANGAN kosongkan collected_data jika user sudah kasih data sebelumnya
+3. Jika data sudah ada di context, PERTAHANKAN di collected_data
+4. Output HANYA JSON murni, tidak ada teks lain
+5. JANGAN tanya email (tidak wajib)
+
+═══════════════════════════════════════════════════════════════════
+CONTOH OUTPUT YANG BENAR
+═══════════════════════════════════════════════════════════════════
+User: "Halo, mau tanya harga xpander"
+Output:
+{"message":"Halo Kak! 👋 Terima kasih sudah menghubungi Mitsubishi SUN Bekasi. Untuk Xpander, kami punya beberapa varian menarik. Boleh saya tahu nama Kakak dan nomor WA yang bisa dihubungi?","collected_data":{"name":null,"phone":null,"request_type":"Sales Inquiry","vehicle":"Xpander","plat":null,"details":{"service_date":null,"part_name":null,"unit_interest":"Xpander"}},"is_data_complete":false}
+
+User: "Saya Budi, 081234567890"
+Output:
+{"message":"Terima kasih Kak Budi! 🙏 Data sudah saya catat. Tim sales kami akan segera menghubungi Kakak di 081234567890 untuk info lengkap Xpander. Ada yang ingin ditanyakan lagi?","collected_data":{"name":"Budi","phone":"081234567890","request_type":"Sales Inquiry","vehicle":"Xpander","plat":null,"details":{"service_date":null,"part_name":null,"unit_interest":"Xpander"}},"is_data_complete":true}`;
 
 // Generate session ID
 function generateSessionId() {
@@ -155,7 +213,7 @@ async function callOpenRouter(messages, knowledgeContext = '') {
             { role: 'system', content: systemPrompt },
             ...messages
         ],
-        temperature: 0.7,
+        temperature: 0.3, // Lower temperature for more consistent JSON output
         max_tokens: 1000
     };
 
@@ -185,35 +243,234 @@ async function callOpenRouter(messages, knowledgeContext = '') {
     }
 }
 
-// Parse AI response (handle both JSON and plain text)
-// Parse AI response (handle both JSON and plain text)
-function parseAIResponse(content) {
+// Server-side data extraction as fallback - Enhanced Version
+function extractDataFromText(text, existingData = {}) {
+    const extracted = { ...existingData };
+
+    console.log('[EXTRACT] Processing text:', text.substring(0, 100));
+
+    // Extract phone number (Indonesian format)
+    const phonePatterns = [
+        /(?:0|62|\+62)[\s.-]?8\d{1,2}[\s.-]?\d{3,4}[\s.-]?\d{3,4}/g,
+        /08\d{8,11}/g,
+        /\b\d{10,13}\b/g
+    ];
+
+    for (const pattern of phonePatterns) {
+        const matches = text.match(pattern);
+        if (matches && matches.length > 0) {
+            // Clean and normalize phone number
+            let phone = matches[0].replace(/[\s.-]/g, '');
+            if (phone.startsWith('62')) phone = '0' + phone.slice(2);
+            if (phone.startsWith('+62')) phone = '0' + phone.slice(3);
+            if (phone.length >= 10 && phone.length <= 14) {
+                extracted.phone = phone;
+                console.log('[EXTRACT] Phone found:', phone);
+                break;
+            }
+        }
+    }
+
+    // Enhanced name extraction patterns - More comprehensive
+    const namePatterns = [
+        // "nama saya Budi", "nama Budi", "saya Budi"
+        /(?:nama\s+(?:saya\s+)?(?:adalah\s+)?|saya\s+)([A-Za-z][A-Za-z\s]{1,30})/i,
+        // "panggil saya Budi", "panggil Budi"
+        /(?:panggil\s+(?:saya\s+)?)([A-Za-z][A-Za-z\s]{1,30})/i,
+        // "ini Budi", "saya ini Budi"  
+        /(?:ini\s+)([A-Za-z][A-Za-z\s]{1,30})/i,
+        // "Budi 081234567890" - name before phone
+        /^([A-Za-z][A-Za-z\s]{1,25})\s*[,\-]?\s*(?:0|08|\+62|\d{10})/im,
+        // Simple name at start: "Budi, mau service"
+        /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*[,.:]/m,
+        // "nama: Budi" or "nama = Budi"
+        /nama\s*[:=]\s*([A-Za-z][A-Za-z\s]{1,30})/i,
+        // Just a capitalized name word followed by comma/phone
+        /\b([A-Z][a-z]{2,15}(?:\s+[A-Z][a-z]{2,15})?)\s*[,]?\s*\d{10,13}/,
+    ];
+
+    // Common words to exclude from name detection
+    const excludeWords = ['ok', 'ya', 'iya', 'siap', 'mau', 'halo', 'hi', 'hai', 'saya', 'nama', 'service', 'servis',
+        'booking', 'test', 'drive', 'beli', 'harga', 'mobil', 'xpander', 'pajero', 'triton',
+        'baik', 'terima', 'kasih', 'tolong', 'minta', 'besok', 'hari', 'ini', 'untuk'];
+
+    for (const pattern of namePatterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+            let name = match[1].trim();
+            // Remove trailing common words
+            name = name.split(/\s+/).filter(word => !excludeWords.includes(word.toLowerCase())).join(' ').trim();
+
+            // Validate name (at least 2 chars, not just numbers, not common words)
+            if (name.length >= 2 &&
+                !/^\d+$/.test(name) &&
+                !excludeWords.includes(name.toLowerCase())) {
+                extracted.name = name;
+                console.log('[EXTRACT] Name found from user text:', name);
+                break;
+            }
+        }
+    }
+
+    // Extract request type from keywords
+    const lowerText = text.toLowerCase();
+    if (!extracted.request_type) {
+        if (lowerText.includes('service') || lowerText.includes('servis') || lowerText.includes('booking')) {
+            extracted.request_type = 'Service Booking';
+        } else if (lowerText.includes('test drive') || lowerText.includes('coba')) {
+            extracted.request_type = 'Test Drive';
+        } else if (lowerText.includes('sparepart') || lowerText.includes('part') || lowerText.includes('suku cadang')) {
+            extracted.request_type = 'Sparepart Info';
+        } else if (lowerText.includes('beli') || lowerText.includes('harga') || lowerText.includes('kredit') || lowerText.includes('cicilan')) {
+            extracted.request_type = 'Sales Inquiry';
+        }
+    }
+
+    // Extract vehicle names
+    const vehicles = ['xpander', 'pajero', 'triton', 'l300', 'outlander', 'eclipse', 'colt', 'strada', 'delica'];
+    for (const vehicle of vehicles) {
+        if (lowerText.includes(vehicle)) {
+            extracted.vehicle = vehicle.charAt(0).toUpperCase() + vehicle.slice(1);
+            break;
+        }
+    }
+
+    // Extract plat nomor (Indonesian format)
+    const platMatch = text.match(/\b([A-Z]{1,2}\s?\d{1,4}\s?[A-Z]{1,3})\b/i);
+    if (platMatch) {
+        extracted.plat = platMatch[1].toUpperCase().replace(/\s/g, ' ');
+    }
+
+    return extracted;
+}
+
+// Extract name from AI response message (e.g., "Kak Budi")
+function extractNameFromAIMessage(aiMessage) {
+    // Pattern: "Kak [Name]" or "Kakak [Name]"
+    const patterns = [
+        /(?:Kak|Kakak|Mas|Mbak|Pak|Bu|Bapak|Ibu)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/,
+        /(?:Halo|Hi|Hai)\s+(?:Kak|Kakak|Mas|Mbak)?\s*([A-Z][a-z]+)/,
+        /Terima kasih[,!]?\s+(?:Kak|Kakak)?\s*([A-Z][a-z]+)/,
+    ];
+
+    for (const pattern of patterns) {
+        const match = aiMessage.match(pattern);
+        if (match && match[1]) {
+            const name = match[1].trim();
+            if (name.length >= 2 && !/^(saya|anda|customer|user)$/i.test(name)) {
+                console.log('[EXTRACT] Name found from AI message:', name);
+                return name;
+            }
+        }
+    }
+    return null;
+}
+
+// Parse AI response (handle both JSON and plain text) - Enhanced Version
+function parseAIResponse(content, userMessage = '', existingData = {}) {
+    let result = {
+        message: content,
+        collected_data: { ...existingData },
+        is_data_complete: false
+    };
+
     try {
         let cleanContent = content;
 
         // 1. Remove markdown code blocks if present
         if (content.includes('```')) {
-            cleanContent = content.replace(/```json\n?|```/g, '').trim();
+            cleanContent = content.replace(/```json\n?|```\n?/g, '').trim();
         }
 
-        // 2. Try to find the first valid JSON object start and end
+        // 2. Remove any leading/trailing whitespace and newlines
+        cleanContent = cleanContent.trim();
+
+        // 3. Try to find valid JSON
         const firstBrace = cleanContent.indexOf('{');
         const lastBrace = cleanContent.lastIndexOf('}');
 
-        if (firstBrace !== -1 && lastBrace !== -1) {
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
             const jsonStr = cleanContent.substring(firstBrace, lastBrace + 1);
-            return JSON.parse(jsonStr);
+
+            // Try parsing
+            const parsed = JSON.parse(jsonStr);
+
+            // Validate required fields exist
+            if (parsed.message) {
+                result.message = parsed.message;
+            }
+
+            // Merge collected_data (AI data takes priority, but preserve existing)
+            if (parsed.collected_data && typeof parsed.collected_data === 'object') {
+                result.collected_data = {
+                    ...existingData,
+                    ...parsed.collected_data,
+                    details: {
+                        ...(existingData.details || {}),
+                        ...(parsed.collected_data.details || {})
+                    }
+                };
+
+                // Clean null values but keep actual data
+                for (const key of Object.keys(result.collected_data)) {
+                    if (result.collected_data[key] === null && existingData[key]) {
+                        result.collected_data[key] = existingData[key];
+                    }
+                }
+            }
+
+            result.is_data_complete = parsed.is_data_complete === true;
+
+            console.log('[PARSE] JSON parsed successfully');
         }
     } catch (e) {
-        console.error("JSON Parse Error:", e);
-        // Fallback to plain text if parsing fails
+        console.error("[PARSE] JSON Parse Error:", e.message);
+        console.error("[PARSE] Raw content:", content.substring(0, 200));
     }
 
-    return {
-        message: content, // Return full content if not valid JSON
-        collected_data: {},
-        is_data_complete: false
-    };
+    // 4. Server-side extraction as fallback
+    if (userMessage) {
+        const serverExtracted = extractDataFromText(userMessage, result.collected_data);
+
+        // Merge server-extracted data (only if AI missed it)
+        if (serverExtracted.name && !result.collected_data.name) {
+            result.collected_data.name = serverExtracted.name;
+            console.log('[FALLBACK] Name extracted by server from user text:', serverExtracted.name);
+        }
+        if (serverExtracted.phone && !result.collected_data.phone) {
+            result.collected_data.phone = serverExtracted.phone;
+            console.log('[FALLBACK] Phone extracted by server:', serverExtracted.phone);
+        }
+        if (serverExtracted.request_type && !result.collected_data.request_type) {
+            result.collected_data.request_type = serverExtracted.request_type;
+        }
+        if (serverExtracted.vehicle && !result.collected_data.vehicle) {
+            result.collected_data.vehicle = serverExtracted.vehicle;
+        }
+        if (serverExtracted.plat && !result.collected_data.plat) {
+            result.collected_data.plat = serverExtracted.plat;
+        }
+    }
+
+    // 5. Extract name from AI message as last resort (e.g., "Kak Barod")
+    if (!result.collected_data.name && result.message) {
+        const nameFromAI = extractNameFromAIMessage(result.message);
+        if (nameFromAI) {
+            result.collected_data.name = nameFromAI;
+            console.log('[FALLBACK] Name extracted from AI response:', nameFromAI);
+        }
+    }
+
+    // 6. Auto-complete check: if we have name + phone + request_type, mark complete
+    if (result.collected_data.name &&
+        result.collected_data.phone &&
+        result.collected_data.request_type &&
+        !result.is_data_complete) {
+        result.is_data_complete = true;
+        console.log('[AUTO-COMPLETE] Data marked complete by server validation');
+    }
+
+    return result;
 }
 
 // GET /api/chat/sessions - Get all sessions for history page
@@ -502,7 +759,8 @@ router.post('/message', async (req, res) => {
         const aiResponse = await callOpenRouter(messages, knowledgeContext);
         console.log('[DEBUG] RAW AI Response:', aiResponse); // Debug raw response
 
-        const parsed = parseAIResponse(aiResponse);
+        // Parse AI response with user message and existing data for fallback extraction
+        const parsed = parseAIResponse(aiResponse, message, collectedData);
         console.log('[DEBUG] Parsed Object:', JSON.stringify(parsed, null, 2)); // Debug parsed object
 
         // Save bot response
@@ -522,62 +780,180 @@ router.post('/message', async (req, res) => {
             console.log('[DEBUG] Update Result:', updateResult);
         }
 
+        // ============= DEBUG: Request Creation Check =============
+        console.log('\n[REQUEST-CHECK] ==========================================');
+        console.log('[REQUEST-CHECK] is_data_complete:', parsed.is_data_complete);
+        console.log('[REQUEST-CHECK] collected_data.name:', parsed.collected_data?.name || 'MISSING');
+        console.log('[REQUEST-CHECK] collected_data.phone:', parsed.collected_data?.phone || 'MISSING');
+        console.log('[REQUEST-CHECK] collected_data.request_type:', parsed.collected_data?.request_type || 'MISSING');
+        console.log('[REQUEST-CHECK] Full collected_data:', JSON.stringify(parsed.collected_data, null, 2));
+        console.log('[REQUEST-CHECK] ==========================================\n');
+
         // If data is complete, create request
-        if (parsed.is_data_complete && parsed.collected_data?.name && parsed.collected_data?.phone) {
-            try {
-                const requestId = generateRequestId();
+        const hasName = parsed.collected_data?.name && parsed.collected_data.name.trim().length > 0;
+        const hasPhone = parsed.collected_data?.phone && parsed.collected_data.phone.trim().length > 0;
+        const shouldCreateRequest = parsed.is_data_complete && hasName && hasPhone;
 
-                // Normalize request type to match ENUM
-                let requestType = parsed.collected_data.request_type || 'Sales Inquiry';
-                const validTypes = ['Service Booking', 'Test Drive', 'Sparepart Info', 'Sales Inquiry'];
+        console.log('[REQUEST-CHECK] hasName:', hasName, '| hasPhone:', hasPhone, '| shouldCreateRequest:', shouldCreateRequest);
 
-                // Map common variations to valid types
-                if (requestType.toLowerCase().includes('service')) requestType = 'Service Booking';
-                else if (requestType.toLowerCase().includes('test')) requestType = 'Test Drive';
-                else if (requestType.toLowerCase().includes('part') || requestType.toLowerCase().includes('suku')) requestType = 'Sparepart Info';
-                else if (requestType.toLowerCase().includes('sales') || requestType.toLowerCase().includes('beli')) requestType = 'Sales Inquiry';
+        if (shouldCreateRequest) {
+            console.log('[REQUEST-CREATE] Attempting to create request...');
 
-                // Fallback if still invalid
-                if (!validTypes.includes(requestType)) requestType = 'Sales Inquiry';
+            // Check if request already exists for this session
+            const [existingRequest] = await pool.query(
+                'SELECT id FROM requests WHERE session_id = ?',
+                [sessionId]
+            );
 
-                const reqTime = getJakartaDBTimestamp();
+            if (existingRequest.length === 0) {
+                try {
+                    const requestId = generateRequestId();
 
-                await pool.query(
-                    `INSERT INTO requests (id, type, status, name, phone, email, vehicle, plat, details, session_id, notes, created_at)
-                     VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [
+                    // Normalize request type to match ENUM
+                    let requestType = parsed.collected_data.request_type || 'Sales Inquiry';
+                    const validTypes = ['Service Booking', 'Test Drive', 'Sparepart Info', 'Sales Inquiry'];
+
+                    // Map common variations to valid types
+                    if (requestType.toLowerCase().includes('service')) requestType = 'Service Booking';
+                    else if (requestType.toLowerCase().includes('test')) requestType = 'Test Drive';
+                    else if (requestType.toLowerCase().includes('part') || requestType.toLowerCase().includes('suku')) requestType = 'Sparepart Info';
+                    else if (requestType.toLowerCase().includes('sales') || requestType.toLowerCase().includes('beli')) requestType = 'Sales Inquiry';
+
+                    // Fallback if still invalid
+                    if (!validTypes.includes(requestType)) requestType = 'Sales Inquiry';
+
+                    const reqTime = getJakartaDBTimestamp();
+
+                    console.log('[REQUEST-CREATE] Inserting request with data:', {
                         requestId,
                         requestType,
-                        parsed.collected_data.name,
-                        parsed.collected_data.phone,
-                        parsed.collected_data.email || null, // Added email
-                        parsed.collected_data.vehicle || null,
-                        parsed.collected_data.plat || null,
-                        JSON.stringify(parsed.collected_data.details || {}),
-                        sessionId,
-                        `Request dari chat session ${sessionId}`,
-                        reqTime
-                    ]
-                );
+                        name: parsed.collected_data.name,
+                        phone: parsed.collected_data.phone,
+                        sessionId
+                    });
 
-                // Update session with request_id
-                await pool.query(
-                    'UPDATE chat_sessions SET request_id = ? WHERE id = ?',
-                    [requestId, sessionId]
-                );
+                    await pool.query(
+                        `INSERT INTO requests (id, type, status, name, phone, email, vehicle, plat, details, session_id, notes, created_at)
+                         VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [
+                            requestId,
+                            requestType,
+                            parsed.collected_data.name,
+                            parsed.collected_data.phone,
+                            parsed.collected_data.email || null,
+                            parsed.collected_data.vehicle || null,
+                            parsed.collected_data.plat || null,
+                            JSON.stringify(parsed.collected_data.details || {}),
+                            sessionId,
+                            `Request dari chat session ${sessionId}`,
+                            reqTime
+                        ]
+                    );
 
-                // Add status history
-                await pool.query(
-                    'INSERT INTO request_status_history (request_id, status, label, created_at) VALUES (?, ?, ?, ?)',
-                    [requestId, 'pending', 'Request Baru dari Chat', reqTime]
-                );
+                    console.log('[REQUEST-CREATE] Request INSERT success');
 
-                parsed.requestId = requestId;
-                console.log(`[SUCCESS] Request created: ${requestId} for Session: ${sessionId}`);
-            } catch (err) {
-                console.error('Failed to create request. Error:', err.message);
-                console.error('SQL State:', err.sqlState);
-                console.error('SQL Message:', err.sqlMessage);
+                    // Update session with request_id
+                    await pool.query(
+                        'UPDATE chat_sessions SET request_id = ? WHERE id = ?',
+                        [requestId, sessionId]
+                    );
+
+                    // Add status history
+                    await pool.query(
+                        'INSERT INTO request_status_history (request_id, status, label, created_at) VALUES (?, ?, ?, ?)',
+                        [requestId, 'pending', 'Request Baru dari Chat', reqTime]
+                    );
+
+                    parsed.requestId = requestId;
+                    console.log(`[SUCCESS] ✅ Request created: ${requestId} for Session: ${sessionId}`);
+                } catch (err) {
+                    console.error('[REQUEST-CREATE] ❌ Failed to create request!');
+                    console.error('[REQUEST-CREATE] Error Message:', err.message);
+                    console.error('[REQUEST-CREATE] SQL State:', err.sqlState);
+                    console.error('[REQUEST-CREATE] SQL Message:', err.sqlMessage);
+                    console.error('[REQUEST-CREATE] Full Error:', err);
+                }
+            } else {
+                // Request already exists, return existing ID
+                parsed.requestId = existingRequest[0].id;
+                console.log(`[INFO] Request already exists: ${existingRequest[0].id} for Session: ${sessionId}`);
+            }
+        } else {
+            console.log('[REQUEST-CHECK] ⚠️ Skipping request creation - conditions not met');
+        }
+
+        // Check if user is asking about request/booking status
+        const lowerMessage = message.toLowerCase();
+        const isAskingStatus = lowerMessage.includes('sudah terkirim') ||
+            lowerMessage.includes('sudah dikirim') ||
+            lowerMessage.includes('sudah masuk') ||
+            lowerMessage.includes('berhasil') ||
+            lowerMessage.includes('request saya') ||
+            lowerMessage.includes('booking saya') ||
+            lowerMessage.includes('pesanan saya') ||
+            lowerMessage.includes('data saya') ||
+            lowerMessage.includes('sudah tercatat') ||
+            lowerMessage.includes('sudah terdaftar') ||
+            lowerMessage.includes('apakah sudah');
+
+        if (isAskingStatus && collectedData?.name && collectedData?.phone) {
+            // Check if request exists for this session
+            const [existingRequest] = await pool.query(
+                'SELECT id FROM requests WHERE session_id = ?',
+                [sessionId]
+            );
+
+            if (existingRequest.length === 0) {
+                // No request yet, create one now
+                try {
+                    const requestId = generateRequestId();
+
+                    let requestType = collectedData.request_type || parsed.collected_data?.request_type || 'Sales Inquiry';
+                    const validTypes = ['Service Booking', 'Test Drive', 'Sparepart Info', 'Sales Inquiry'];
+
+                    if (requestType.toLowerCase().includes('service')) requestType = 'Service Booking';
+                    else if (requestType.toLowerCase().includes('test')) requestType = 'Test Drive';
+                    else if (requestType.toLowerCase().includes('part') || requestType.toLowerCase().includes('suku')) requestType = 'Sparepart Info';
+                    else if (requestType.toLowerCase().includes('sales') || requestType.toLowerCase().includes('beli')) requestType = 'Sales Inquiry';
+                    if (!validTypes.includes(requestType)) requestType = 'Sales Inquiry';
+
+                    const reqTime = getJakartaDBTimestamp();
+
+                    await pool.query(
+                        `INSERT INTO requests (id, type, status, name, phone, email, vehicle, plat, details, session_id, notes, created_at)
+                         VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                        [
+                            requestId,
+                            requestType,
+                            collectedData.name,
+                            collectedData.phone,
+                            collectedData.email || null,
+                            collectedData.vehicle || null,
+                            collectedData.plat || null,
+                            JSON.stringify(collectedData.details || {}),
+                            sessionId,
+                            `Request dibuat saat user menanyakan status - Session ${sessionId}`,
+                            reqTime
+                        ]
+                    );
+
+                    await pool.query(
+                        'UPDATE chat_sessions SET request_id = ? WHERE id = ?',
+                        [requestId, sessionId]
+                    );
+
+                    await pool.query(
+                        'INSERT INTO request_status_history (request_id, status, label, created_at) VALUES (?, ?, ?, ?)',
+                        [requestId, 'pending', 'Request dibuat saat konfirmasi', reqTime]
+                    );
+
+                    parsed.requestId = requestId;
+                    console.log(`[SUCCESS] Request auto-created on status check: ${requestId} for Session: ${sessionId}`);
+                } catch (err) {
+                    console.error('Failed to auto-create request:', err.message);
+                }
+            } else {
+                parsed.requestId = existingRequest[0].id;
             }
         }
 
