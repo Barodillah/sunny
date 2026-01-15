@@ -1080,4 +1080,30 @@ Ringkasan:`;
     }
 });
 
+// DELETE /api/chat/session/:id - Delete session and its messages
+router.delete('/session/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!id) {
+            return res.status(400).json({ error: 'Session ID is required' });
+        }
+
+        // Delete messages first (foreign key constraint might require this, though CASCADE is usually better)
+        await pool.query('DELETE FROM chat_messages WHERE session_id = ?', [id]);
+
+        // Delete session
+        const [result] = await pool.query('DELETE FROM chat_sessions WHERE id = ?', [id]);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        res.json({ success: true, message: 'Session deleted successfully' });
+    } catch (error) {
+        console.error('Delete session error:', error);
+        res.status(500).json({ error: 'Failed to delete session' });
+    }
+});
+
 export default router;

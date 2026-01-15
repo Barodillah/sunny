@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Clock, Calendar, User, MessageSquare, MoreVertical, Download, FileText, ArrowUpRight, RefreshCw } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ArrowLeft, Clock, Calendar, User, MessageSquare, MoreVertical, Download, FileText, ArrowUpRight, RefreshCw, Copy, Trash, Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { formatTimeOnly, formatJakartaTime } from '../../utils/timezone';
 
 const API_BASE = import.meta.env.VITE_API_URL;
@@ -15,6 +15,24 @@ const HistoryDetailPage = () => {
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [copySuccess, setCopySuccess] = useState(false);
+
+    // Helper to format message text (bold and newlines)
+    const formatMessage = (text) => {
+        if (!text) return '';
+        return text.split('\n').map((line, i) => (
+            <React.Fragment key={i}>
+                {line.split(/(\*\*.*?\*\*)/g).map((part, j) => {
+                    if (part.startsWith('**') && part.endsWith('**')) {
+                        return <strong key={j}>{part.slice(2, -2)}</strong>;
+                    }
+                    return part;
+                })}
+                {i < text.split('\n').length - 1 && <br />}
+            </React.Fragment>
+        ));
+    };
 
     useEffect(() => {
         const fetchSessionDetail = async () => {
@@ -64,6 +82,59 @@ const HistoryDetailPage = () => {
 
         fetchSessionDetail();
     }, [id]);
+
+    const handleExport = () => {
+        if (!messages.length) return;
+
+        const transcript = messages.map(msg => {
+            const senderName = msg.sender === 'user' ? (sessionData?.user || 'User') : 'SUNNY AI';
+            return `[${msg.time}] ${senderName}: ${msg.text}`;
+        }).join('\n\n');
+
+        const blob = new Blob([transcript], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chat-transcript-${id}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleCopy = () => {
+        if (!messages.length) return;
+
+        const transcript = messages.map(msg => {
+            const senderName = msg.sender === 'user' ? (sessionData?.user || 'User') : 'SUNNY AI';
+            return `[${msg.time}] ${senderName}: ${msg.text}`;
+        }).join('\n\n');
+
+        navigator.clipboard.writeText(transcript).then(() => {
+            setCopySuccess(true);
+            setTimeout(() => setCopySuccess(false), 2000);
+            setShowDropdown(false);
+        });
+    };
+
+    const handleDelete = async () => {
+        if (window.confirm('Apakah Anda yakin ingin menghapus history chat ini? Tindakan ini tidak dapat dibatalkan.')) {
+            try {
+                const response = await fetch(`${API_BASE}/chat/session/${id}`, {
+                    method: 'DELETE',
+                });
+
+                if (response.ok) {
+                    navigate('/dashboard/history', { replace: true });
+                } else {
+                    alert('Gagal menghapus session.');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                alert('Terjadi kesalahan saat menghapus session.');
+            }
+        }
+    };
 
     if (loading) {
         return (
@@ -129,7 +200,7 @@ const HistoryDetailPage = () => {
                         </p>
                     </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 relative">
                     {sessionData.requestId && (
                         <button
                             onClick={() => navigate(`/dashboard/request/${sessionData.requestId}`)}
@@ -140,12 +211,53 @@ const HistoryDetailPage = () => {
                             <ArrowUpRight size={16} />
                         </button>
                     )}
-                    <button className="hidden sm:flex items-center gap-2 bg-gray-50 text-gray-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-gray-100 transition-colors">
+                    <button
+                        onClick={handleExport}
+                        className="hidden sm:flex items-center gap-2 bg-gray-50 text-gray-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-gray-100 transition-colors"
+                    >
                         <Download size={16} /> Export Transcript
                     </button>
-                    <button className="p-2 text-gray-400 hover:text-gray-900 transition-colors">
-                        <MoreVertical size={24} />
-                    </button>
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowDropdown(!showDropdown)}
+                            className="p-2 text-gray-400 hover:text-gray-900 transition-colors hover:bg-gray-100 rounded-xl"
+                        >
+                            <MoreVertical size={24} />
+                        </button>
+
+                        <AnimatePresence>
+                            {showDropdown && (
+                                <>
+                                    <div
+                                        className="fixed inset-0 z-10"
+                                        onClick={() => setShowDropdown(false)}
+                                    />
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                        className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-20 overflow-hidden"
+                                    >
+                                        <button
+                                            onClick={handleCopy}
+                                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors text-left"
+                                        >
+                                            {copySuccess ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                                            {copySuccess ? 'Copied!' : 'Copy Transcript'}
+                                        </button>
+                                        <div className="h-px bg-gray-100 my-0" />
+                                        <button
+                                            onClick={handleDelete}
+                                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 transition-colors text-left"
+                                        >
+                                            <Trash size={16} />
+                                            Delete History
+                                        </button>
+                                    </motion.div>
+                                </>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
             </div>
 
@@ -182,7 +294,7 @@ const HistoryDetailPage = () => {
                                         ? 'bg-gray-900 text-white rounded-tr-none'
                                         : 'bg-white text-gray-800 border border-gray-100 rounded-tl-none'
                                         }`}>
-                                        {msg.text}
+                                        {formatMessage(msg.text)}
                                     </div>
                                     <span className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider">
                                         {msg.time}
