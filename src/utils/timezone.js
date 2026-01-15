@@ -7,9 +7,7 @@
  * @returns {Date} Date object adjusted to Jakarta time
  */
 export function toJakartaTime(dateInput) {
-    const utcDate = new Date(dateInput);
-    const jakartaOffset = 7 * 60 * 60 * 1000; // 7 hours in milliseconds
-    return new Date(utcDate.getTime() + jakartaOffset);
+    return new Date(dateInput);
 }
 
 /**

@@ -139,6 +139,16 @@ export default function ChatPage() {
         }
     }, [messages, isTyping]);
 
+    // Constructive Auto-focus: Keep input focused
+    useEffect(() => {
+        if (!isTyping && inputRef.current) {
+            // Small timeout to ensure DOM is ready and prevent fighting for focus if user tapped something else intentionally
+            setTimeout(() => {
+                inputRef.current?.focus();
+            }, 100);
+        }
+    }, [messages, isTyping, isInitializing]);
+
     const handleSendMessage = async (text) => {
         if (!text.trim() || !sessionId) return;
 
@@ -454,6 +464,7 @@ export default function ChatPage() {
                 >
                     <input
                         ref={inputRef}
+                        autoFocus
                         type="text"
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
