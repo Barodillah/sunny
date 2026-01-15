@@ -150,13 +150,28 @@ function generateRequestId() {
     return `REQ-${num}`;
 }
 
-// Format date to UTC+7 (Asia/Jakarta timezone)
+// Format date to UTC+7 (Asia/Jakarta timezone) - Manual offset for Vercel compatibility
 function formatToJakartaTime(date) {
-    const options = { timeZone: 'Asia/Jakarta' };
+    // Convert to Jakarta time by adding 7 hours to UTC
+    const utcDate = new Date(date);
+    const jakartaOffset = 7 * 60 * 60 * 1000; // 7 hours in milliseconds
+    const jakartaDate = new Date(utcDate.getTime() + jakartaOffset);
+
+    // Format manually
+    const hours = jakartaDate.getUTCHours();
+    const minutes = jakartaDate.getUTCMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 || 12;
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[jakartaDate.getUTCMonth()];
+    const day = jakartaDate.getUTCDate();
+    const year = jakartaDate.getUTCFullYear();
+
     return {
-        time: new Date(date).toLocaleTimeString('en-US', { ...options, hour: '2-digit', minute: '2-digit' }),
-        date: new Date(date).toLocaleDateString('en-US', { ...options, month: 'short', day: 'numeric', year: 'numeric' }),
-        full: new Date(date).toLocaleString('id-ID', { ...options })
+        time: `${hour12}:${minutes} ${ampm}`,
+        date: `${month} ${day}, ${year}`,
+        full: `${day}/${jakartaDate.getUTCMonth() + 1}/${year} ${hours.toString().padStart(2, '0')}:${minutes}`
     };
 }
 

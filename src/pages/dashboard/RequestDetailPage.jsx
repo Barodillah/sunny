@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { formatDateShort } from '../../utils/timezone';
 
 const RequestDetailPage = () => {
     console.log("RequestDetailPage rendered");
@@ -82,16 +83,8 @@ const RequestDetailPage = () => {
         }
     };
 
-    const formatDate = (dateString) => {
-        if (!dateString) return '-';
-        return new Date(dateString).toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'Asia/Jakarta'
-        });
-    };
+    // formatDate now uses utility function
+    const formatDate = (dateString) => formatDateShort(dateString);
 
     const getTypeIcon = (type) => {
         switch (type) {

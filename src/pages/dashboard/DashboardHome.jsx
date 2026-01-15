@@ -10,6 +10,7 @@ import {
     Calendar,
     Loader2
 } from 'lucide-react';
+import { formatRelativeTime, toJakartaTime } from '../../utils/timezone';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -74,22 +75,7 @@ const BarChart = ({ data, dataKey, color, label }) => {
     );
 };
 
-// Helper function to format relative time
-const formatRelativeTime = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Baru saja';
-    if (diffMins < 60) return `${diffMins} menit lalu`;
-    if (diffHours < 24) return `${diffHours} jam lalu`;
-    if (diffDays === 1) return 'Kemarin';
-    if (diffDays < 7) return `${diffDays} hari lalu`;
-    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' });
-};
+// Helper function to format relative time - now imported from utils/timezone
 
 const DashboardHome = () => {
     const navigate = useNavigate();
@@ -105,10 +91,14 @@ const DashboardHome = () => {
 
     // Calculate date range for display
     const getDateRange = () => {
-        const end = new Date();
-        const start = new Date();
-        start.setDate(start.getDate() - 6);
-        return `${start.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' })} - ${end.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' })}`;
+        const end = toJakartaTime(new Date());
+        const start = toJakartaTime(new Date());
+        start.setUTCDate(start.getUTCDate() - 6);
+
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const startStr = `${start.getUTCDate()} ${months[start.getUTCMonth()]}`;
+        const endStr = `${end.getUTCDate()} ${months[end.getUTCMonth()]}`;
+        return `${startStr} - ${endStr}`;
     };
 
 
@@ -155,7 +145,7 @@ const DashboardHome = () => {
                 </div>
                 <div className="flex gap-3">
                     <button className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-2 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-                        <Calendar size={16} /> {new Date().toLocaleDateString('id-ID', { month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' })}
+                        <Calendar size={16} /> {(() => { const d = toJakartaTime(new Date()); const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']; return `${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`; })()}
                     </button>
                     <button className="bg-gray-900 text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-red-600 transition-colors shadow-lg shadow-gray-200">
                         Export Report

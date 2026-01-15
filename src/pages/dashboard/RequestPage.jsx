@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Filter, Search, Edit2, Trash2, CheckCircle, XCircle, Clock } from 'lucide-react';
 import axios from 'axios';
+import { formatDateShort } from '../../utils/timezone';
 
 const StatusBadge = ({ status }) => {
     const colors = {
@@ -55,15 +56,8 @@ const RequestPage = () => {
         }
     };
 
-    const formatDate = (dateString) => {
-        return new Date(dateString).toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'Asia/Jakarta'
-        });
-    };
+    // formatDate now uses utility function
+    const formatDate = (dateString) => formatDateShort(dateString);
 
     const filteredRequests = requests.filter(req =>
         req.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
