@@ -88,7 +88,7 @@ const formatRelativeTime = (dateString) => {
     if (diffHours < 24) return `${diffHours} jam lalu`;
     if (diffDays === 1) return 'Kemarin';
     if (diffDays < 7) return `${diffDays} hari lalu`;
-    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' });
 };
 
 const DashboardHome = () => {
@@ -108,7 +108,7 @@ const DashboardHome = () => {
         const end = new Date();
         const start = new Date();
         start.setDate(start.getDate() - 6);
-        return `${start.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${end.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`;
+        return `${start.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' })} - ${end.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' })}`;
     };
 
 
@@ -155,7 +155,7 @@ const DashboardHome = () => {
                 </div>
                 <div className="flex gap-3">
                     <button className="flex items-center gap-2 bg-white border border-gray-200 px-4 py-2 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-                        <Calendar size={16} /> {new Date().toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })}
+                        <Calendar size={16} /> {new Date().toLocaleDateString('id-ID', { month: 'short', year: 'numeric', timeZone: 'Asia/Jakarta' })}
                     </button>
                     <button className="bg-gray-900 text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-red-600 transition-colors shadow-lg shadow-gray-200">
                         Export Report
