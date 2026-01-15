@@ -261,6 +261,126 @@ router.get('/sessions', async (req, res) => {
     }
 });
 
+// GET /api/chat/stats - Get dashboard statistics
+router.get('/stats', async (req, res) => {
+    try {
+        // Get total sessions count
+        const [[sessionCount]] = await pool.query('SELECT COUNT(*) as total FROM chat_sessions');
+        const totalSessions = sessionCount.total || 0;
+
+        // Get total requests count
+        const [[requestCount]] = await pool.query('SELECT COUNT(*) as total FROM requests');
+        const totalRequests = requestCount.total || 0;
+
+        // Calculate conversion rate (requests / sessions * 100)
+        const conversionRate = totalSessions > 0
+            ? Math.round((totalRequests / totalSessions) * 100)
+            : 0;
+
+        // Calculate average response time from last 50 messages
+        // Get pairs of user message followed by bot message and calculate time difference
+        const [messages] = await pool.query(`
+            SELECT 
+                m1.created_at as user_time,
+                m2.created_at as bot_time,
+                TIMESTAMPDIFF(SECOND, m1.created_at, m2.created_at) as response_seconds
+            FROM chat_messages m1
+            INNER JOIN chat_messages m2 ON m1.session_id = m2.session_id 
+                AND m2.sender = 'bot' 
+                AND m2.created_at > m1.created_at
+                AND m2.id = (
+                    SELECT MIN(id) FROM chat_messages 
+                    WHERE session_id = m1.session_id 
+                    AND sender = 'bot' 
+                    AND created_at > m1.created_at
+                )
+            WHERE m1.sender = 'user'
+            ORDER BY m1.created_at DESC
+            LIMIT 50
+        `);
+
+        let avgResponseTime = 0;
+        if (messages.length > 0) {
+            const totalSeconds = messages.reduce((sum, m) => sum + (m.response_seconds || 0), 0);
+            avgResponseTime = (totalSeconds / messages.length).toFixed(1);
+        }
+
+        res.json({
+            totalSessions,
+            totalRequests,
+            conversionRate,
+            avgResponseTime: parseFloat(avgResponseTime)
+        });
+    } catch (error) {
+        console.error('Get stats error:', error);
+        res.status(500).json({ error: 'Failed to get stats' });
+    }
+});
+
+// GET /api/chat/daily-stats - Get daily sessions and requests for last 7 days
+router.get('/daily-stats', async (req, res) => {
+    try {
+        // Get sessions per day for last 7 days
+        const [sessionsData] = await pool.query(`
+            SELECT 
+                DATE(started_at) as date,
+                COUNT(*) as count
+            FROM chat_sessions
+            WHERE started_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+            GROUP BY DATE(started_at)
+            ORDER BY date ASC
+        `);
+
+        // Get requests per day for last 7 days
+        const [requestsData] = await pool.query(`
+            SELECT 
+                DATE(created_at) as date,
+                COUNT(*) as count
+            FROM requests
+            WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+            GROUP BY DATE(created_at)
+            ORDER BY date ASC
+        `);
+
+        // Create array for last 7 days with 0 as default
+        const last7Days = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0];
+            last7Days.push({
+                date: dateStr,
+                dayName: date.toLocaleDateString('id-ID', { weekday: 'short' }),
+                sessions: 0,
+                requests: 0
+            });
+        }
+
+        // Fill in sessions data
+        sessionsData.forEach(row => {
+            const dateStr = new Date(row.date).toISOString().split('T')[0];
+            const dayEntry = last7Days.find(d => d.date === dateStr);
+            if (dayEntry) {
+                dayEntry.sessions = row.count;
+            }
+        });
+
+        // Fill in requests data
+        requestsData.forEach(row => {
+            const dateStr = new Date(row.date).toISOString().split('T')[0];
+            const dayEntry = last7Days.find(d => d.date === dateStr);
+            if (dayEntry) {
+                dayEntry.requests = row.count;
+            }
+        });
+
+        res.json(last7Days);
+    } catch (error) {
+        console.error('Get daily stats error:', error);
+        res.status(500).json({ error: 'Failed to get daily stats' });
+    }
+});
+
 // Helper to get current Jakarta timestamp for DB
 function getJakartaDBTimestamp() {
     const now = new Date();
